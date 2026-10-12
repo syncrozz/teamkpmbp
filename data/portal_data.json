@@ -1,0 +1,68 @@
+{
+  "tabs": [
+    {
+      "id": "home",
+      "label": "Home",
+      "order": 1,
+      "visible": true,
+      "isSystem": true,
+      "description": "Contingent Portal Overview"
+    },
+    {
+      "id": "schedule",
+      "label": "Competition Schedule",
+      "order": 2,
+      "visible": true,
+      "isSystem": false,
+      "description": "Schedule charts and event timetables"
+    },
+    {
+      "id": "documents",
+      "label": "Documents & References",
+      "order": 3,
+      "visible": true,
+      "isSystem": false,
+      "description": "Rules, handbook, score sheets & guidelines"
+    },
+    {
+      "id": "events",
+      "label": "Event Information",
+      "order": 4,
+      "visible": true,
+      "isSystem": false,
+      "description": "Rundown, competition categories & contacts"
+    },
+    {
+      "id": "locations",
+      "label": "Locations & Movement",
+      "order": 5,
+      "visible": true,
+      "isSystem": false,
+      "description": "Venues, transportation & accommodation"
+    },
+    {
+      "id": "announcements",
+      "label": "Announcements",
+      "order": 6,
+      "visible": true,
+      "isSystem": false,
+      "description": "Official updates and alerts"
+    }
+  ],
+  "settings": {
+    "eventTitle": "KPM Bandar Penawar Contingent Hub",
+    "eventSubtitle": "Central Reference & Operational Portal",
+    "contingentName": "KPM Bandar Penawar (KPMBP)",
+    "motto": "Kecemerlangan Terbukti, Semangat Menjulang",
+    "secretariatLocation": "Bilik Gerakan Kontinjen KPMBP",
+    "emergencyContactName": "Urus Setia Kontinjen",
+    "emergencyContactPhone": "+60 19-700 8921",
+    "allowPublicGuestView": false
+  },
+  "announcements": [],
+  "schedules": [],
+  "documents": [],
+  "eventSections": [],
+  "locations": [],
+  "customTabsContent": {}
+}

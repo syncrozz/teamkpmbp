@@ -1,0 +1,8 @@
+{
+  "name": "Team Kpmbp",
+  "description": "Central reference portal for KPM Bandar Penawar competition schedules, documents, event information, and announcements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
