@@ -161,6 +161,14 @@
       "schema": { "$ref": "#/entities/Announcement" },
       "description": "Official broadcast announcements"
     },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/EventCategory" },
+      "description": "Event competition categories and channels"
+    },
+    "/customTabs/{tabId}": {
+      "schema": { "type": "object" },
+      "description": "Dynamic custom tab markdown content"
+    },
     "/admins/{adminUid}": {
       "schema": { "$ref": "#/entities/AdminProfile" },
       "description": "Authorized administrators list"

@@ -350,4 +350,17 @@ export const api = {
       body: JSON.stringify({ content }),
     });
   },
+
+  // System status & migration diagnostics
+  async getSystemStatus(): Promise<any> {
+    return request<any>('/api/admin/system-status');
+  },
+
+  async migrateData(dryRun: boolean = false, forceOverwrite: boolean = false): Promise<any> {
+    return request<any>('/api/admin/migrate-data', {
+      method: 'POST',
+      body: JSON.stringify({ dryRun, forceOverwrite }),
+    });
+  },
 };
+
