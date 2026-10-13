@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, KeyRound, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Lock, KeyRound, AlertCircle, CheckCircle2, ArrowRight, X } from 'lucide-react';
 import { api } from '../../services/api';
 import { AuthStatus } from '../../types';
+import { signInAdminWithGoogle } from '../../lib/firebase';
 
 interface AuthGateProps {
   authStatus: AuthStatus;
   onAuthSuccess: (status: AuthStatus) => void;
+  onClose?: () => void;
 }
 
-export const AuthGate: React.FC<AuthGateProps> = ({ authStatus, onAuthSuccess }) => {
-  const [activeTab, setActiveTab] = useState<'team' | 'admin'>(authStatus.isSetup ? 'team' : 'admin');
+export const AuthGate: React.FC<AuthGateProps> = ({ authStatus, onAuthSuccess, onClose }) => {
+  const [activeTab, setActiveTab] = useState<'team' | 'admin'>('admin');
   
   // Team Access State
   const [teamPasscode, setTeamPasscode] = useState('');
@@ -28,6 +30,24 @@ export const AuthGate: React.FC<AuthGateProps> = ({ authStatus, onAuthSuccess })
   const [setupTeamPasscode, setSetupTeamPasscode] = useState('KPMBP2026');
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
+
+  const handleGoogleSignIn = async () => {
+    setAdminLoading(true);
+    setAdminError(null);
+    try {
+      const user = await signInAdminWithGoogle();
+      if (!user || !user.email) {
+        throw new Error('Google Sign-In did not return an authorized email.');
+      }
+      await api.firebaseAdminLogin(user.email);
+      const updatedStatus = await api.getAuthStatus();
+      onAuthSuccess(updatedStatus);
+    } catch (err: any) {
+      setAdminError(err.message || 'Google Sign-In failed or was cancelled.');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
 
   const handleTeamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,19 +115,34 @@ export const AuthGate: React.FC<AuthGateProps> = ({ authStatus, onAuthSuccess })
     }
   };
 
+  const containerClasses = onClose
+    ? 'fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150'
+    : 'min-h-screen bg-slate-900 flex flex-col justify-center items-center px-4 py-12 text-slate-100';
+
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center px-4 py-12 text-slate-100">
-      <div className="w-full max-w-md">
+    <div className={containerClasses}>
+      <div className="w-full max-w-md relative">
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute -top-11 right-0 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs py-1.5 px-3 rounded-lg bg-slate-800/90 border border-slate-700/80 cursor-pointer shadow-sm transition-colors"
+          >
+            <X className="w-4 h-4" />
+            <span>Tutup (Kembali ke Portal)</span>
+          </button>
+        )}
+
         {/* Header Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 mb-4 shadow-inner">
-            <ShieldCheck className="w-8 h-8" />
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 mb-3 shadow-inner">
+            <ShieldCheck className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Competition Hub KPMBP</h1>
+          <h1 className="text-xl font-bold tracking-tight text-white">Competition Hub KPMBP</h1>
           <div className="flex items-center justify-center gap-2 text-xs text-slate-400 mt-1">
             <span>KPM Bandar Penawar</span>
             <span aria-hidden="true">·</span>
-            <span>Restricted Access Portal</span>
+            <span>Akses Pentadbir Portal</span>
           </div>
         </div>
 
@@ -334,10 +369,34 @@ export const AuthGate: React.FC<AuthGateProps> = ({ authStatus, onAuthSuccess })
                       disabled={adminLoading}
                       className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      {adminLoading ? 'Signing in...' : 'Sign In as Admin'}
+                      {adminLoading ? 'Signing in...' : 'Sign In with Password'}
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </form>
+
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-700/80" />
+                    </div>
+                    <div className="relative flex justify-center text-[11px] uppercase">
+                      <span className="bg-slate-800 px-2 text-slate-400 font-medium">Or</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={adminLoading}
+                    className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>Sign In with Google (Firebase)</span>
+                  </button>
                 </div>
               )}
             </div>

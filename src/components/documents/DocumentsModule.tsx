@@ -181,7 +181,7 @@ export const DocumentsModule: React.FC<DocumentsModuleProps> = ({
                           <Pin className="w-3.5 h-3.5 fill-amber-500" />
                         </span>
                       )}
-                      {isAdmin && inlineEditMode && (
+                      {isAdmin && (
                         <InlineEditTrigger
                           onClick={() => handleOpenEdit(doc)}
                           size="sm"

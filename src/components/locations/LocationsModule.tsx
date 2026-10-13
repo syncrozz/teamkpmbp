@@ -156,7 +156,7 @@ export const LocationsModule: React.FC<LocationsModuleProps> = ({
                   <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                     {getCategoryIcon(loc.category)}
                   </div>
-                  {isAdmin && inlineEditMode && (
+                  {isAdmin && (
                     <InlineEditTrigger
                       onClick={() => handleOpenEdit(loc)}
                       size="sm"

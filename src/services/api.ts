@@ -8,6 +8,7 @@ import {
   DocumentItem,
   EventSection,
   LocationItem,
+  AIImageAnalysisResult,
 } from '../types';
 
 const TOKEN_KEY = 'kpmbp_hub_token';
@@ -80,6 +81,15 @@ export const api = {
     return res;
   },
 
+  async firebaseAdminLogin(email: string): Promise<{ token: string; role: 'admin'; email: string }> {
+    const res = await request<{ token: string; role: 'admin'; email: string }>('/api/auth/firebase-login', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    setStoredToken(res.token);
+    return res;
+  },
+
   async teamLogin(passcode: string): Promise<{ token: string; role: 'team' }> {
     const res = await request<{ token: string; role: 'team' }>('/api/auth/team-login', {
       method: 'POST',
@@ -127,6 +137,86 @@ export const api = {
     });
   },
 
+  async updateActivePhase(activePhase: 'pre-final' | 'during-final'): Promise<{ activePhase: string }> {
+    return request<{ activePhase: string }>('/api/portal/phase', {
+      method: 'PUT',
+      body: JSON.stringify({ activePhase }),
+    });
+  },
+
+  async updateCategories(categories: any[]): Promise<any[]> {
+    return request<any[]>('/api/portal/categories', {
+      method: 'PUT',
+      body: JSON.stringify({ categories }),
+    });
+  },
+
+  // Direct Poster / Image Upload
+  async uploadFile(file: File): Promise<{ url: string; fileName: string; size: number }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const fileData = reader.result as string;
+          const res = await request<{ url: string; fileName: string; size: number }>('/api/upload', {
+            method: 'POST',
+            body: JSON.stringify({
+              fileName: file.name,
+              fileData,
+              contentType: file.type,
+            }),
+          });
+          resolve(res);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error('Gagal membaca fail imej'));
+      reader.readAsDataURL(file);
+    });
+  },
+
+  // AI-Assisted Image Analysis
+  async analyseImageWithAI(
+    fileOrData: File | string,
+    fileName?: string,
+    mimeType?: string
+  ): Promise<AIImageAnalysisResult> {
+    if (typeof fileOrData === 'string') {
+      return request<AIImageAnalysisResult>('/api/ai/analyse-image', {
+        method: 'POST',
+        body: JSON.stringify({
+          imageUrl: fileOrData.startsWith('/uploads/') ? fileOrData : undefined,
+          fileData: !fileOrData.startsWith('/uploads/') ? fileOrData : undefined,
+          fileName: fileName || 'poster.png',
+          mimeType: mimeType || 'image/png',
+        }),
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const fileData = reader.result as string;
+          const res = await request<AIImageAnalysisResult>('/api/ai/analyse-image', {
+            method: 'POST',
+            body: JSON.stringify({
+              fileData,
+              fileName: fileOrData.name,
+              mimeType: fileOrData.type,
+            }),
+          });
+          resolve(res);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error('Gagal membaca fail imej'));
+      reader.readAsDataURL(fileOrData);
+    });
+  },
+
   async updateTabs(tabs: NavigationTab[]): Promise<NavigationTab[]> {
     return request<NavigationTab[]>('/api/portal/tabs', {
       method: 'PUT',
@@ -147,6 +237,20 @@ export const api = {
         body: JSON.stringify(announcement),
       });
     }
+  },
+
+  async saveBatchAnnouncements(items: Partial<Announcement>[]): Promise<{ success: boolean; count: number; items: Announcement[] }> {
+    return request<{ success: boolean; count: number; items: Announcement[] }>('/api/portal/announcements/batch', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  async supersedeAnnouncement(id: string, isSuperseded: boolean, supersededReason?: string): Promise<Announcement> {
+    return request<Announcement>(`/api/portal/announcements/${id}/supersede`, {
+      method: 'PUT',
+      body: JSON.stringify({ isSuperseded, supersededReason }),
+    });
   },
 
   async deleteAnnouncement(id: string): Promise<{ success: boolean }> {

@@ -82,7 +82,7 @@ export const ScheduleModule: React.FC<ScheduleModuleProps> = ({
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">Competition Schedule</h2>
-            {isAdmin && inlineEditMode && activeSchedule && (
+            {isAdmin && activeSchedule && (
               <InlineEditTrigger
                 onClick={() => handleOpenEdit(activeSchedule)}
                 label="Edit Category"
@@ -172,7 +172,7 @@ export const ScheduleModule: React.FC<ScheduleModuleProps> = ({
                         / {activeSchedule.subcategory}
                       </span>
                     )}
-                    {isAdmin && inlineEditMode && (
+                    {isAdmin && (
                       <InlineEditTrigger
                         onClick={() => handleOpenEdit(activeSchedule)}
                         size="sm"

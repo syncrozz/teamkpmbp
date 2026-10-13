@@ -24,19 +24,82 @@ export interface NavigationTab {
   description?: string;
 }
 
+export type OperationalPhase = 'all' | 'pre-final' | 'during-final';
+export type ContentStatus = 'published' | 'draft';
 export type AnnouncementPriority = 'urgent' | 'important' | 'general';
+
+export interface EventCategory {
+  id: string;
+  name: string;
+  shortCode?: string;
+  description?: string;
+  managerName?: string;
+  managerPhone?: string;
+  order: number;
+  visible: boolean;
+}
+
+export interface AIImageAnalysisResult {
+  suggestedCategory: string;
+  suggestedTitle: string;
+  suggestedDescription: string;
+  relevantEvent?: string | null;
+  suggestedTags: string[];
+  extractedDatesAndInstructions?: string;
+  verificationRequired: boolean;
+  serviceUnavailable?: boolean;
+  message?: string;
+}
 
 export interface Announcement {
   id: string;
   title: string;
-  content: string;
+  content: string; // Original Telegram message content
   priority: AnnouncementPriority;
   isPinned: boolean;
-  category: string;
+  category: string; // e.g. 'symphonic-duo', 'tarian-zapin', 'general', etc.
+  phase: OperationalPhase; // 'all' | 'pre-final' | 'during-final'
+  status: ContentStatus; // 'published' | 'draft'
   author: string;
   timestamp: string;
-  externalUrl?: string;
+  imageUrl?: string; // Direct uploaded poster or image URL
+  imageCaption?: string;
+  externalUrl?: string; // Optional link to Telegram post or Drive doc
   externalUrlLabel?: string;
+  telegramRawText?: string;
+  tags?: string[];
+  isSuperseded?: boolean; // When newer circular replaces older version
+  supersededReason?: string;
+  collectionId?: string; // For grouping multi-page document posters
+  collectionName?: string;
+  collectionIndex?: number;
+  importantDates?: string;
+  verificationRequired?: boolean;
+  lastUpdated?: string;
+}
+
+export interface BatchUploadItem {
+  tempId: string;
+  file: File;
+  previewUrl: string;
+  uploadedUrl?: string;
+  title: string;
+  description: string;
+  category: string;
+  phase: OperationalPhase;
+  priority: AnnouncementPriority;
+  tags: string[];
+  status: ContentStatus;
+  isPinned: boolean;
+  collectionId?: string;
+  collectionName?: string;
+  collectionIndex?: number;
+  importantDates?: string;
+  verificationRequired?: boolean;
+  aiAnalyzing: boolean;
+  aiSuggested?: AIImageAnalysisResult;
+  aiAccepted: boolean;
+  selectedForAction: boolean;
 }
 
 export interface ScheduleItem {
@@ -46,9 +109,12 @@ export interface ScheduleItem {
   date: string;
   time?: string;
   venue: string;
-  imageUrl: string;
+  imageUrl?: string;
   sourceDocUrl?: string;
   notes?: string;
+  phase?: OperationalPhase;
+  status?: ContentStatus;
+  performanceOrder?: string; // e.g. "Giliran ke-4"
   order: number;
   lastUpdated: string;
 }
@@ -62,6 +128,8 @@ export interface DocumentItem {
   description?: string;
   fileUrl: string;
   fileType: DocumentType;
+  phase?: OperationalPhase;
+  status?: ContentStatus;
   order: number;
   isPinned?: boolean;
   lastUpdated: string;
@@ -86,6 +154,8 @@ export interface EventSection {
   category: string;
   type: EventSectionType;
   description?: string;
+  phase?: OperationalPhase;
+  status?: ContentStatus;
   items: EventSectionItem[];
   rawContent?: string;
   order: number;
@@ -106,6 +176,8 @@ export interface LocationItem {
   floorplanUrl?: string;
   contactPerson?: string;
   contactPhone?: string;
+  phase?: OperationalPhase;
+  status?: ContentStatus;
   order: number;
 }
 
@@ -118,11 +190,19 @@ export interface PortalSettings {
   emergencyContactName: string;
   emergencyContactPhone: string;
   allowPublicGuestView?: boolean;
+  activePhase: 'pre-final' | 'during-final';
+  phaseAName?: string;
+  phaseADescription?: string;
+  phaseBName?: string;
+  phaseBDescription?: string;
+  phaseDates?: string;
+  customSubheaders?: Record<string, string>;
 }
 
 export interface PortalData {
   tabs: NavigationTab[];
   settings: PortalSettings;
+  categories: EventCategory[];
   announcements: Announcement[];
   schedules: ScheduleItem[];
   documents: DocumentItem[];

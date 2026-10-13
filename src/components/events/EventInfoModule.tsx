@@ -135,7 +135,7 @@ export const EventInfoModule: React.FC<EventInfoModuleProps> = ({
                 <div>
                   <div className="flex items-center gap-2.5">
                     <h3 className="text-lg font-bold text-slate-900">{activeSection.title}</h3>
-                    {isAdmin && inlineEditMode && (
+                    {isAdmin && (
                       <InlineEditTrigger
                         onClick={() => handleOpenEdit(activeSection)}
                         size="sm"

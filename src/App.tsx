@@ -9,6 +9,7 @@ import {
   EventSection,
   LocationItem,
   Announcement,
+  EventCategory,
 } from './types';
 import { api } from './services/api';
 import { AuthGate } from './components/auth/AuthGate';
@@ -21,8 +22,12 @@ import { EventInfoModule } from './components/events/EventInfoModule';
 import { LocationsModule } from './components/locations/LocationsModule';
 import { AnnouncementsModule } from './components/announcements/AnnouncementsModule';
 import { CustomTabModule } from './components/custom/CustomTabModule';
+import { GalleryModule } from './components/gallery/GalleryModule';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { PortalSettingsModal } from './components/common/PortalSettingsModal';
+import { TelegramPublishModal } from './components/announcements/TelegramPublishModal';
+import { BatchImageUploadModal } from './components/admin/BatchImageUploadModal';
+import { testFirestoreConnection } from './lib/firebase';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -35,11 +40,20 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [isAdminView, setIsAdminView] = useState<boolean>(false);
   const [inlineEditMode, setInlineEditMode] = useState<boolean>(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState<boolean>(false);
 
   // Inline Settings Modal
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
 
-  // Initialize and check session
+  // Telegram Direct Publish Modal State
+  const [isTelegramPublishOpen, setIsTelegramPublishOpen] = useState<boolean>(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [publishCategory, setPublishCategory] = useState<string>('general');
+
+  // Batch AI Upload Modal State
+  const [isBatchUploadOpen, setIsBatchUploadOpen] = useState<boolean>(false);
+
+  // Initialize and load portal data for public view
   const checkAuthAndLoadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -47,10 +61,28 @@ export default function App() {
       const status = await api.getAuthStatus();
       setAuthStatus(status);
 
-      if (status.isAuthenticated) {
-        const data = await api.getPortalData();
-        setPortalData(data);
+      // Public Default View: Portal data is always loaded
+      const data = await api.getPortalData();
+
+      // Ensure 'gallery' tab exists in navigation
+      if (data && data.tabs && !data.tabs.some((t) => t.id === 'gallery')) {
+        const homeTab = data.tabs.find((t) => t.id === 'home');
+        const otherTabs = data.tabs.filter((t) => t.id !== 'home');
+        data.tabs = [
+          homeTab || { id: 'home', label: 'Utama', order: 1, visible: true, isSystem: true },
+          {
+            id: 'gallery',
+            label: 'Galeri Poster',
+            order: 2,
+            visible: true,
+            isSystem: false,
+            description: 'Infografik & poster rasmi mengikut kategori',
+          },
+          ...otherTabs,
+        ];
       }
+
+      setPortalData(data);
     } catch (err: any) {
       setError(err.message || 'Failed to initialize portal connection.');
     } finally {
@@ -60,10 +92,12 @@ export default function App() {
 
   useEffect(() => {
     checkAuthAndLoadData();
+    testFirestoreConnection();
   }, [checkAuthAndLoadData]);
 
   const handleAuthSuccess = async (status: AuthStatus) => {
     setAuthStatus(status);
+    setIsAdminLoginOpen(false);
     try {
       const data = await api.getPortalData();
       setPortalData(data);
@@ -75,7 +109,6 @@ export default function App() {
   const handleLogout = async () => {
     await api.logout();
     setAuthStatus((prev) => (prev ? { ...prev, isAuthenticated: false, role: null } : null));
-    setPortalData(null);
     setIsAdminView(false);
     setInlineEditMode(false);
   };
@@ -192,6 +225,30 @@ export default function App() {
     );
   };
 
+  const handleSaveBatchAnnouncements = async (batchItems: Partial<Announcement>[]) => {
+    const res = await api.saveBatchAnnouncements(batchItems);
+    if (res.items && res.items.length > 0) {
+      setPortalData((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          announcements: [...res.items, ...prev.announcements],
+        };
+      });
+    }
+  };
+
+  const handleSupersedeAnnouncement = async (id: string, isSuperseded: boolean, reason?: string) => {
+    const updated = await api.supersedeAnnouncement(id, isSuperseded, reason);
+    setPortalData((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        announcements: prev.announcements.map((a) => (a.id === updated.id ? updated : a)),
+      };
+    });
+  };
+
   const handleSaveCustomTabContent = async (tabId: string, content: string) => {
     await api.saveCustomTabContent(tabId, content);
     setPortalData((prev) => {
@@ -206,6 +263,31 @@ export default function App() {
     });
   };
 
+  const handleSaveSubheader = async (sectionKey: string, newTitle: string) => {
+    if (!portalData) return;
+    const currentSubheaders = portalData.settings.customSubheaders || {};
+    const updatedSettings: PortalSettings = {
+      ...portalData.settings,
+      customSubheaders: {
+        ...currentSubheaders,
+        [sectionKey]: newTitle,
+      },
+    };
+    await handleUpdateSettings(updatedSettings);
+  };
+
+  const handleSaveCategory = async (cat: Partial<EventCategory>) => {
+    if (!portalData) return;
+    const currentCats = portalData.categories || [];
+    const index = currentCats.findIndex((c) => c.id === cat.id);
+    const updated =
+      index >= 0
+        ? currentCats.map((c) => (c.id === cat.id ? { ...c, ...cat } : c))
+        : [...currentCats, cat as EventCategory];
+    await api.updateCategories(updated);
+    setPortalData((prev) => (prev ? { ...prev, categories: updated } : null));
+  };
+
   // Loading Screen
   if (loading) {
     return (
@@ -218,17 +300,7 @@ export default function App() {
     );
   }
 
-  // Restricted Access Screen (Auth Gate)
-  if (!authStatus?.isAuthenticated) {
-    return (
-      <AuthGate
-        authStatus={authStatus || { isSetup: false, adminEmail: 'khaikerr@gmail.com', isAuthenticated: false, role: null }}
-        onAuthSuccess={handleAuthSuccess}
-      />
-    );
-  }
-
-  // Once authenticated but waiting for data
+  // If waiting for portal data
   if (!portalData) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -238,9 +310,9 @@ export default function App() {
             <button
               type="button"
               onClick={checkAuthAndLoadData}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold cursor-pointer"
             >
-              Retry
+              Cuba Semula
             </button>
           </div>
         ) : (
@@ -250,7 +322,7 @@ export default function App() {
     );
   }
 
-  const isAdmin = authStatus.role === 'admin';
+  const isAdmin = authStatus?.role === 'admin';
   const currentTab = portalData.tabs.find((t) => t.id === activeTab) || portalData.tabs[0];
 
   return (
@@ -263,13 +335,14 @@ export default function App() {
           setActiveTab(tabId);
           setIsAdminView(false);
         }}
-        userRole={authStatus.role}
-        userEmail={authStatus.adminEmail}
+        userRole={authStatus?.role || null}
+        userEmail={authStatus?.adminEmail}
         inlineEditMode={inlineEditMode}
         onToggleInlineEdit={() => setInlineEditMode(!inlineEditMode)}
         isAdminView={isAdminView}
         onToggleAdminView={() => setIsAdminView(!isAdminView)}
         onLogout={handleLogout}
+        onOpenAdminLogin={() => setIsAdminLoginOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -302,6 +375,42 @@ export default function App() {
                 inlineEditMode={inlineEditMode}
                 onNavigateTab={(tabId) => setActiveTab(tabId)}
                 onEditSettings={() => setIsSettingsModalOpen(true)}
+                onOpenPublishModal={() => {
+                  setEditingAnnouncement(null);
+                  setPublishCategory('general');
+                  setIsTelegramPublishOpen(true);
+                }}
+                onOpenBatchUploadModal={() => setIsBatchUploadOpen(true)}
+                onUpdatePhase={async (phase) => {
+                  await handleUpdateSettings({
+                    ...portalData.settings,
+                    activePhase: phase,
+                  });
+                }}
+                onSaveSubheader={handleSaveSubheader}
+                onSaveSchedule={handleSaveSchedule}
+                onSaveCategory={handleSaveCategory}
+                onSaveAnnouncement={handleSaveAnnouncement}
+                onUpdateSettings={handleUpdateSettings}
+              />
+            )}
+
+            {activeTab === 'gallery' && (
+              <GalleryModule
+                announcements={portalData.announcements}
+                categories={portalData.categories || []}
+                isAdmin={isAdmin}
+                inlineEditMode={inlineEditMode}
+                activePhase={portalData.settings.activePhase}
+                onOpenBatchUploadModal={() => setIsBatchUploadOpen(true)}
+                onOpenTelegramPublishModal={() => {
+                  setPublishCategory('general');
+                  setEditingAnnouncement(null);
+                  setIsTelegramPublishOpen(true);
+                }}
+                onUpdateAnnouncement={handleSaveAnnouncement}
+                onDeleteAnnouncement={handleDeleteAnnouncement}
+                onSupersedeAnnouncement={handleSupersedeAnnouncement}
               />
             )}
 
@@ -348,15 +457,23 @@ export default function App() {
             {activeTab === 'announcements' && (
               <AnnouncementsModule
                 announcements={portalData.announcements}
+                categories={portalData.categories || []}
                 isAdmin={isAdmin}
                 inlineEditMode={inlineEditMode}
-                onSaveAnnouncement={handleSaveAnnouncement}
+                activePhase={portalData.settings.activePhase}
+                onOpenTelegramPublish={(defaultCat, editItem) => {
+                  setPublishCategory(defaultCat || 'general');
+                  setEditingAnnouncement(editItem || null);
+                  setIsTelegramPublishOpen(true);
+                }}
+                onOpenBatchUploadModal={() => setIsBatchUploadOpen(true)}
                 onDeleteAnnouncement={handleDeleteAnnouncement}
               />
             )}
 
             {/* Custom Tab View */}
             {activeTab !== 'home' &&
+              activeTab !== 'gallery' &&
               activeTab !== 'schedule' &&
               activeTab !== 'documents' &&
               activeTab !== 'events' &&
@@ -385,6 +502,41 @@ export default function App() {
           onClose={() => setIsSettingsModalOpen(false)}
           settings={portalData.settings}
           onSave={handleUpdateSettings}
+        />
+      )}
+
+      {/* Batch AI Image Upload & Review Modal */}
+      {isBatchUploadOpen && (
+        <BatchImageUploadModal
+          isOpen={isBatchUploadOpen}
+          onClose={() => setIsBatchUploadOpen(false)}
+          categories={portalData.categories || []}
+          activePhase={portalData.settings.activePhase}
+          onSaveBatch={handleSaveBatchAnnouncements}
+        />
+      )}
+
+      {/* Telegram Direct Publish / Edit Modal */}
+      {isTelegramPublishOpen && (
+        <TelegramPublishModal
+          isOpen={isTelegramPublishOpen}
+          onClose={() => {
+            setIsTelegramPublishOpen(false);
+            setEditingAnnouncement(null);
+          }}
+          onSave={handleSaveAnnouncement}
+          categories={portalData.categories || []}
+          announcementToEdit={editingAnnouncement}
+          activePhase={portalData.settings.activePhase}
+        />
+      )}
+
+      {/* Admin Login Modal */}
+      {isAdminLoginOpen && (
+        <AuthGate
+          authStatus={authStatus || { isSetup: false, adminEmail: 'khaikerr@gmail.com', isAuthenticated: false, role: null }}
+          onAuthSuccess={handleAuthSuccess}
+          onClose={() => setIsAdminLoginOpen(false)}
         />
       )}
     </div>

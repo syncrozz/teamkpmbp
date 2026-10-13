@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Menu, X, LogOut, Settings, Edit3, Eye, ShieldAlert } from 'lucide-react';
+import { Shield, Menu, X, LogOut, Settings, Edit3, Eye, Lock } from 'lucide-react';
 import { NavigationTab, UserRole } from '../../types';
 
 interface HeaderProps {
@@ -13,6 +13,7 @@ interface HeaderProps {
   isAdminView: boolean;
   onToggleAdminView: () => void;
   onLogout: () => void;
+  onOpenAdminLogin?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   isAdminView,
   onToggleAdminView,
   onLogout,
+  onOpenAdminLogin,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdmin = userRole === 'admin';
@@ -142,25 +144,38 @@ export const Header: React.FC<HeaderProps> = ({
               </>
             )}
 
-            {/* Session Indicator */}
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-[11px] font-medium text-slate-700">
-                {isAdmin ? 'Administrator' : 'Team Member'}
-              </span>
-              <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
-                {isAdmin ? (userEmail || 'khaikerr@gmail.com') : 'KPMBP Contingent'}
-              </span>
-            </div>
+            {/* Session Indicator or Admin Login Button */}
+            {isAdmin ? (
+              <>
+                <div className="hidden md:flex flex-col text-right">
+                  <span className="text-[11px] font-medium text-slate-700">
+                    Administrator
+                  </span>
+                  <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                    {userEmail || 'khaikerr@gmail.com'}
+                  </span>
+                </div>
 
-            {/* Sign Out */}
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Sign out from portal"
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+                {/* Sign Out */}
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  title="Sign out from portal"
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenAdminLogin}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Admin Login</span>
+              </button>
+            )}
 
             {/* Mobile Hamburger Menu Toggle */}
             <button
@@ -243,16 +258,32 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 px-2">
-            <span>Signed in as {isAdmin ? 'Admin' : 'Team Access'}</span>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="text-rose-600 font-medium hover:underline"
-            >
-              Sign Out
-            </button>
-          </div>
+          {isAdmin ? (
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 px-2">
+              <span>Signed in as Administrator ({userEmail || 'khaikerr@gmail.com'})</span>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="text-rose-600 font-medium hover:underline cursor-pointer"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <div className="pt-3 border-t border-slate-100 px-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenAdminLogin) onOpenAdminLogin();
+                }}
+                className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Admin Login</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </header>

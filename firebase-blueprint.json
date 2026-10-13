@@ -1,0 +1,169 @@
+{
+  "entities": {
+    "PortalSettings": {
+      "title": "PortalSettings",
+      "description": "General settings and branding for the competition hub",
+      "type": "object",
+      "properties": {
+        "eventTitle": { "type": "string" },
+        "eventSubtitle": { "type": "string" },
+        "contingentName": { "type": "string" },
+        "motto": { "type": "string" },
+        "secretariatLocation": { "type": "string" },
+        "emergencyContactName": { "type": "string" },
+        "emergencyContactPhone": { "type": "string" },
+        "allowPublicGuestView": { "type": "boolean" }
+      },
+      "required": ["eventTitle", "contingentName"]
+    },
+    "NavigationTab": {
+      "title": "NavigationTab",
+      "description": "Dynamic navigation tab definition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "order": { "type": "number" },
+        "visible": { "type": "boolean" },
+        "isSystem": { "type": "boolean" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "label", "order", "visible"]
+    },
+    "ScheduleItem": {
+      "title": "ScheduleItem",
+      "description": "Competition category fixture and timetable image reference",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "subcategory": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "venue": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "sourceDocUrl": { "type": "string" },
+        "notes": { "type": "string" },
+        "order": { "type": "number" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["id", "categoryName"]
+    },
+    "DocumentItem": {
+      "title": "DocumentItem",
+      "description": "Handbook, rules, score sheets or Drive links",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileType": { "type": "string" },
+        "order": { "type": "number" },
+        "isPinned": { "type": "boolean" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["id", "title", "fileUrl"]
+    },
+    "EventSection": {
+      "title": "EventSection",
+      "description": "Program rundown, rules, criteria or contacts list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "rawContent": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "title", "type"]
+    },
+    "LocationItem": {
+      "title": "LocationItem",
+      "description": "Competition arenas, transport buses, and accommodations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "address": { "type": "string" },
+        "mapUrl": { "type": "string" },
+        "coordinates": { "type": "string" },
+        "scheduleTimes": { "type": "string" },
+        "routeDetails": { "type": "string" },
+        "notes": { "type": "string" },
+        "floorplanUrl": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "name", "category"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Official notices and urgent circulars",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "priority": { "type": "string" },
+        "isPinned": { "type": "boolean" },
+        "category": { "type": "string" },
+        "author": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "externalUrl": { "type": "string" },
+        "externalUrlLabel": { "type": "string" }
+      },
+      "required": ["id", "title", "content", "priority"]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Authorized administrator user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/portal/settings": {
+      "schema": { "$ref": "#/entities/PortalSettings" },
+      "description": "Global competition hub settings and branding"
+    },
+    "/tabs/{tabId}": {
+      "schema": { "$ref": "#/entities/NavigationTab" },
+      "description": "Configurable navigation tabs"
+    },
+    "/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/ScheduleItem" },
+      "description": "Competition category schedules and image links"
+    },
+    "/documents/{documentId}": {
+      "schema": { "$ref": "#/entities/DocumentItem" },
+      "description": "Document references and links"
+    },
+    "/eventSections/{sectionId}": {
+      "schema": { "$ref": "#/entities/EventSection" },
+      "description": "Event rundown and guidance sections"
+    },
+    "/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/LocationItem" },
+      "description": "Arenas, transport routes and assembly points"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Official broadcast announcements"
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminProfile" },
+      "description": "Authorized administrators list"
+    }
+  }
+}
