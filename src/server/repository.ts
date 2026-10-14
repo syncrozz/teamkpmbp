@@ -16,9 +16,12 @@ import {
   LocationItem,
 } from './types';
 
+import defaultAuthData from '../../data/auth_data.json';
+import defaultPortalData from '../../data/portal_data.json';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT_DIR = path.resolve(__dirname, '../../');
+const ROOT_DIR = process.cwd();
 const DATA_DIR = path.resolve(ROOT_DIR, 'data');
 const AUTH_FILE = path.join(DATA_DIR, 'auth_data.json');
 const PORTAL_FILE = path.join(DATA_DIR, 'portal_data.json');
@@ -56,24 +59,21 @@ export function hashPassword(password: string, salt: string): string {
 export function getLocalAuthStore(): AuthStore {
   if (fs.existsSync(AUTH_FILE)) {
     try {
-      return JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8'));
+      const parsed = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8'));
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
     } catch {
       // corrupt file fallback
     }
   }
 
-  const defaultStore: AuthStore = {
-    isSetup: false,
-    adminEmail: 'khaikerr@gmail.com',
-    adminPasswordHash: '',
-    adminPasswordSalt: '',
-    teamPasscode: '',
-    sessions: {},
-  };
+  // Use bundled default auth data (guaranteed available across all serverless runtimes)
+  const fallback = JSON.parse(JSON.stringify(defaultAuthData)) as AuthStore;
   try {
-    fs.writeFileSync(AUTH_FILE, JSON.stringify(defaultStore, null, 2), 'utf-8');
+    fs.writeFileSync(AUTH_FILE, JSON.stringify(fallback, null, 2), 'utf-8');
   } catch {}
-  return defaultStore;
+  return fallback;
 }
 
 export function saveLocalAuthStore(store: AuthStore): void {
@@ -88,57 +88,27 @@ export function getLocalPortalStore(): PortalStore {
   if (fs.existsSync(PORTAL_FILE)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(PORTAL_FILE, 'utf-8'));
-      if (!parsed.categories || parsed.categories.length === 0) {
-        parsed.categories = DEFAULT_SOAR_CATEGORIES;
+      if (parsed && Array.isArray(parsed.tabs) && parsed.tabs.length > 0) {
+        if (!parsed.categories || parsed.categories.length === 0) {
+          parsed.categories = DEFAULT_SOAR_CATEGORIES;
+        }
+        if (!parsed.settings?.activePhase) {
+          parsed.settings = parsed.settings || {};
+          parsed.settings.activePhase = 'pre-final';
+        }
+        return parsed;
       }
-      if (!parsed.settings?.activePhase) {
-        parsed.settings = parsed.settings || {};
-        parsed.settings.activePhase = 'pre-final';
-      }
-      return parsed;
     } catch {
       // Corrupt file fallback
     }
   }
 
-  const defaultStore: PortalStore = {
-    tabs: [
-      { id: 'home', label: 'Utama', order: 1, visible: true, isSystem: true, description: 'Hab Maklumat & Operasi Kontinjen' },
-      { id: 'gallery', label: 'Galeri Poster', order: 2, visible: true, isSystem: false, description: 'Infografik & poster rasmi' },
-      { id: 'schedule', label: 'Jadual Pertandingan', order: 3, visible: true, isSystem: false, description: 'Jadual carta dan waktu giliran' },
-      { id: 'announcements', label: 'Hebahan Telegram', order: 4, visible: true, isSystem: false, description: 'Mesej, hebahan segera & poster' },
-      { id: 'events', label: 'Maklumat Acara', order: 5, visible: true, isSystem: false, description: 'Kategori acara, giliran & pegawai' },
-      { id: 'locations', label: 'Lokasi & Pergerakan', order: 6, visible: true, isSystem: false, description: 'Venue, bas dan penginapan' },
-      { id: 'documents', label: 'Dokumen & Rujukan', order: 7, visible: true, isSystem: false, description: 'Syarat, buku panduan & borang rasmi' },
-    ],
-    settings: {
-      eventTitle: 'KPMBP SOAR 2026 Contingent Hub',
-      eventSubtitle: 'Hab Maklumat & Operasi Rasmi Kontinjen KPM Bandar Penawar',
-      contingentName: 'KPM Bandar Penawar (KPMBP)',
-      motto: 'Kecemerlangan Terbukti, Semangat Menjulang',
-      secretariatLocation: 'Bilik Gerakan Kontinjen KPMBP, Aras 2 Blok Penginapan',
-      emergencyContactName: 'Urus Setia Kontinjen (Cikgu Khairi / En. Azman)',
-      emergencyContactPhone: '+60 19-700 8921',
-      allowPublicGuestView: true,
-      activePhase: 'pre-final',
-      phaseAName: 'Fasa A: Persediaan Pra-Final',
-      phaseADescription: 'Senarai semak, persiapan, jadual taklimat, aturan ketibaan & penginapan',
-      phaseBName: 'Fasa B: Semasa Pertandingan Final',
-      phaseBDescription: 'Aktiviti hari ini, masa berkumpul, venue pertandingan, giliran persembahan & keputusan',
-      phaseDates: 'SOAR 2026',
-    },
-    categories: DEFAULT_SOAR_CATEGORIES,
-    announcements: [],
-    schedules: [],
-    documents: [],
-    eventSections: [],
-    locations: [],
-    customTabsContent: {},
-  };
+  // Use bundled default portal data (guaranteed available across all serverless runtimes)
+  const fallback = JSON.parse(JSON.stringify(defaultPortalData)) as PortalStore;
   try {
-    fs.writeFileSync(PORTAL_FILE, JSON.stringify(defaultStore, null, 2), 'utf-8');
+    fs.writeFileSync(PORTAL_FILE, JSON.stringify(fallback, null, 2), 'utf-8');
   } catch {}
-  return defaultStore;
+  return fallback;
 }
 
 export function saveLocalPortalStore(store: PortalStore): void {
@@ -153,32 +123,39 @@ export function saveLocalPortalStore(store: PortalStore): void {
 
 class PortalRepository {
   private async isFirestoreAvailable(): Promise<boolean> {
-    const status = await checkFirebaseAdminStatus();
-    return status.connectionHealthy;
+    try {
+      const status = await checkFirebaseAdminStatus();
+      return Boolean(status.connectionHealthy);
+    } catch {
+      return false;
+    }
   }
 
   // ---------------- AUTH STORE & SESSIONS ----------------
 
   async getAuthStore(): Promise<AuthStore> {
-    const db = getAdminDb();
-    if (db && (await this.isFirestoreAvailable())) {
-      try {
-        const configDoc = await db.collection('auth').doc('config').get();
-        if (configDoc.exists) {
-          const data = configDoc.data() as any;
-          // Sessions are queried dynamically or cached
-          return {
-            isSetup: Boolean(data.isSetup),
-            adminEmail: data.adminEmail || 'khaikerr@gmail.com',
-            adminPasswordHash: data.adminPasswordHash || '',
-            adminPasswordSalt: data.adminPasswordSalt || '',
-            teamPasscode: data.teamPasscode || 'KPMBP2026',
-            sessions: {},
-          };
+    try {
+      const db = getAdminDb();
+      if (db && (await this.isFirestoreAvailable())) {
+        try {
+          const configDoc = await db.collection('auth').doc('config').get();
+          if (configDoc.exists) {
+            const data = configDoc.data() as any;
+            return {
+              isSetup: Boolean(data.isSetup),
+              adminEmail: data.adminEmail || 'khaikerr@gmail.com',
+              adminPasswordHash: data.adminPasswordHash || '',
+              adminPasswordSalt: data.adminPasswordSalt || '',
+              teamPasscode: data.teamPasscode || 'KPMBP2026',
+              sessions: {},
+            };
+          }
+        } catch (err: any) {
+          console.warn('[Repository] Firestore getAuthStore failed, falling back to local file:', err.message);
         }
-      } catch (err: any) {
-        console.warn('[Repository] Firestore getAuthStore failed, falling back to local file:', err.message);
       }
+    } catch (err: any) {
+      console.warn('[Repository] Firestore check failed in getAuthStore:', err.message);
     }
     return getLocalAuthStore();
   }
@@ -310,75 +287,79 @@ class PortalRepository {
   // ---------------- PORTAL DATA (PUBLIC & ADMIN) ----------------
 
   async getPortalData(isAdmin: boolean = false): Promise<PortalStore> {
-    const db = getAdminDb();
-    if (db && (await this.isFirestoreAvailable())) {
-      try {
-        // Parallel queries to Firestore
-        const [settingsDoc, tabsSnap, categoriesDoc, customTabsDoc] = await Promise.all([
-          db.collection('portal').doc('settings').get(),
-          db.collection('tabs').orderBy('order', 'asc').get(),
-          db.collection('portal').doc('categories').get(),
-          db.collection('portal').doc('customTabs').get(),
-        ]);
+    try {
+      const db = getAdminDb();
+      if (db && (await this.isFirestoreAvailable())) {
+        try {
+          // Parallel queries to Firestore
+          const [settingsDoc, tabsSnap, categoriesDoc, customTabsDoc] = await Promise.all([
+            db.collection('portal').doc('settings').get(),
+            db.collection('tabs').orderBy('order', 'asc').get(),
+            db.collection('portal').doc('categories').get(),
+            db.collection('portal').doc('customTabs').get(),
+          ]);
 
-        let announcementsQuery = db.collection('announcements');
-        let schedulesQuery = db.collection('schedules');
-        let documentsQuery = db.collection('documents');
-        let eventSectionsQuery = db.collection('eventSections');
-        let locationsQuery = db.collection('locations');
+          let announcementsQuery = db.collection('announcements');
+          let schedulesQuery = db.collection('schedules');
+          let documentsQuery = db.collection('documents');
+          let eventSectionsQuery = db.collection('eventSections');
+          let locationsQuery = db.collection('locations');
 
-        const [announcementsSnap, schedulesSnap, documentsSnap, eventSectionsSnap, locationsSnap] = await Promise.all([
-          announcementsQuery.get(),
-          schedulesQuery.get(),
-          documentsQuery.get(),
-          eventSectionsQuery.get(),
-          locationsQuery.get(),
-        ]);
+          const [announcementsSnap, schedulesSnap, documentsSnap, eventSectionsSnap, locationsSnap] = await Promise.all([
+            announcementsQuery.get(),
+            schedulesQuery.get(),
+            documentsQuery.get(),
+            eventSectionsQuery.get(),
+            locationsQuery.get(),
+          ]);
 
-        let announcements = announcementsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as Announcement));
-        let schedules = schedulesSnap.docs.map((d) => ({ ...d.data(), id: d.id } as ScheduleItem));
-        let documents = documentsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as DocumentItem));
-        let eventSections = eventSectionsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as EventSection));
-        let locations = locationsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as LocationItem));
+          let announcements = announcementsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as Announcement));
+          let schedules = schedulesSnap.docs.map((d) => ({ ...d.data(), id: d.id } as ScheduleItem));
+          let documents = documentsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as DocumentItem));
+          let eventSections = eventSectionsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as EventSection));
+          let locations = locationsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as LocationItem));
 
-        // Sort items by order / timestamp
-        schedules.sort((a, b) => (a.order || 0) - (b.order || 0));
-        documents.sort((a, b) => (a.order || 0) - (b.order || 0));
-        eventSections.sort((a, b) => (a.order || 0) - (b.order || 0));
-        locations.sort((a, b) => (a.order || 0) - (b.order || 0));
+          // Sort items by order / timestamp
+          schedules.sort((a, b) => (a.order || 0) - (b.order || 0));
+          documents.sort((a, b) => (a.order || 0) - (b.order || 0));
+          eventSections.sort((a, b) => (a.order || 0) - (b.order || 0));
+          locations.sort((a, b) => (a.order || 0) - (b.order || 0));
 
-        // If not admin, hide drafts
-        if (!isAdmin) {
-          announcements = announcements.filter((a) => a.status !== 'draft');
-          schedules = schedules.filter((s) => s.status !== 'draft');
-          documents = documents.filter((d) => d.status !== 'draft');
-          eventSections = eventSections.filter((e) => e.status !== 'draft');
-          locations = locations.filter((l) => l.status !== 'draft');
+          // If not admin, hide drafts
+          if (!isAdmin) {
+            announcements = announcements.filter((a) => a.status !== 'draft');
+            schedules = schedules.filter((s) => s.status !== 'draft');
+            documents = documents.filter((d) => d.status !== 'draft');
+            eventSections = eventSections.filter((e) => e.status !== 'draft');
+            locations = locations.filter((l) => l.status !== 'draft');
+          }
+
+          const settings = settingsDoc.exists ? (settingsDoc.data() as PortalSettings) : getLocalPortalStore().settings;
+          const tabs = tabsSnap.docs.length > 0
+            ? tabsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as NavigationTab))
+            : getLocalPortalStore().tabs;
+          const categories = categoriesDoc.exists && categoriesDoc.data()?.items
+            ? (categoriesDoc.data()?.items as EventCategory[])
+            : getLocalPortalStore().categories;
+          const customTabsContent = customTabsDoc.exists ? (customTabsDoc.data() as Record<string, string>) : {};
+
+          return {
+            tabs,
+            settings,
+            categories,
+            announcements,
+            schedules,
+            documents,
+            eventSections,
+            locations,
+            customTabsContent,
+          };
+        } catch (err: any) {
+          console.warn('[Repository] Firestore getPortalData failed, using local file:', err.message);
         }
-
-        const settings = settingsDoc.exists ? (settingsDoc.data() as PortalSettings) : getLocalPortalStore().settings;
-        const tabs = tabsSnap.docs.length > 0
-          ? tabsSnap.docs.map((d) => ({ ...d.data(), id: d.id } as NavigationTab))
-          : getLocalPortalStore().tabs;
-        const categories = categoriesDoc.exists && categoriesDoc.data()?.items
-          ? (categoriesDoc.data()?.items as EventCategory[])
-          : getLocalPortalStore().categories;
-        const customTabsContent = customTabsDoc.exists ? (customTabsDoc.data() as Record<string, string>) : {};
-
-        return {
-          tabs,
-          settings,
-          categories,
-          announcements,
-          schedules,
-          documents,
-          eventSections,
-          locations,
-          customTabsContent,
-        };
-      } catch (err: any) {
-        console.warn('[Repository] Firestore getPortalData failed, using local file:', err.message);
       }
+    } catch (outerErr: any) {
+      console.warn('[Repository] Firestore connection check error in getPortalData:', outerErr.message);
     }
 
     // Local fallback

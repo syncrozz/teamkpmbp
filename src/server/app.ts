@@ -173,15 +173,20 @@ export function createApp() {
       const session = await getSessionFromReq(req);
 
       res.json({
-        isSetup: authStore.isSetup,
-        adminEmail: authStore.adminEmail,
+        isSetup: authStore?.isSetup ?? true,
+        adminEmail: authStore?.adminEmail || 'khaikerr@gmail.com',
         isAuthenticated: !!session,
         role: session ? session.role : null,
         email: session ? session.email : undefined,
       });
     } catch (err: any) {
       console.error('Error in /api/auth/status:', err);
-      res.status(500).json({ error: 'Failed to retrieve auth status.' });
+      res.json({
+        isSetup: true,
+        adminEmail: 'khaikerr@gmail.com',
+        isAuthenticated: false,
+        role: null,
+      });
     }
   });
 
@@ -702,7 +707,12 @@ Berikan output dalam format JSON:
       res.json(data);
     } catch (err: any) {
       console.error('Error in /api/portal/data:', err);
-      res.status(500).json({ error: 'Failed to retrieve portal data.' });
+      try {
+        const { getLocalPortalStore } = await import('./repository');
+        res.json(getLocalPortalStore());
+      } catch {
+        res.status(500).json({ error: 'Failed to retrieve portal data.' });
+      }
     }
   });
 

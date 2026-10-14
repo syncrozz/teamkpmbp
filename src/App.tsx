@@ -58,8 +58,13 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const status = await api.getAuthStatus();
-      setAuthStatus(status);
+      try {
+        const status = await api.getAuthStatus();
+        setAuthStatus(status);
+      } catch (authErr: any) {
+        console.warn('Could not verify auth status, continuing as public viewer:', authErr);
+        setAuthStatus({ isSetup: true, isAuthenticated: false, role: null, adminEmail: 'khaikerr@gmail.com' });
+      }
 
       // Public Default View: Portal data is always loaded
       const data = await api.getPortalData();

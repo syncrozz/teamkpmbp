@@ -133,6 +133,8 @@ export function parseServiceAccountEnv(): {
   };
 }
 
+let cachedStatus: { status: FirebaseAdminStatus; timestamp: number } | null = null;
+
 /**
  * Initialize Firebase Admin SDK using the resolved Service Account credentials.
  */
@@ -144,11 +146,17 @@ export function initFirebaseAdmin(): { app: App | null; db: Firestore | null; er
   try {
     const { credentials, error: parseError } = parseServiceAccountEnv();
 
+    // If no credentials configured and not running in GCP native runtime, do not initialize
+    const isGcpEnvironment = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE);
+    if (!credentials && !isGcpEnvironment) {
+      adminInitError = parseError || 'Pemboleh ubah persekitaran FIREBASE_SERVICE_ACCOUNT belum dikonfigurasi.';
+      return { app: null, db: null, error: adminInitError };
+    }
+
     const existingApps = getApps();
     if (existingApps.length > 0) {
       adminApp = existingApps[0];
     } else {
-      // Determine project ID: Service Account JSON > Explicit Non-Platform Env > Verified Applet Config
       const projectId =
         credentials?.project_id ||
         (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PROJECT_ID !== 'syncrozz-platform'
@@ -173,15 +181,11 @@ export function initFirebaseAdmin(): { app: App | null; db: Firestore | null; er
           clientEmail: credentials.client_email || (credentials as any).clientEmail,
           privateKey: credentials.private_key || (credentials as any).privateKey,
         });
-      } else {
-        // Will rely on Google ADC if available in cloud runtime
-        adminInitError = parseError || 'Kredensial Service Account belum dimuatkan.';
       }
 
       adminApp = initializeApp(appOptions);
     }
 
-    // Determine Firestore Database ID: Explicit Non-Default Env > Verified Applet Config
     const databaseId =
       (process.env.FIRESTORE_DATABASE_ID && process.env.FIRESTORE_DATABASE_ID !== 'default'
         ? process.env.FIRESTORE_DATABASE_ID
@@ -190,11 +194,16 @@ export function initFirebaseAdmin(): { app: App | null; db: Firestore | null; er
 
     try {
       firestoreDb = getFirestore(adminApp, databaseId);
-      firestoreDb.settings({ ignoreUndefinedProperties: true });
+      try {
+        firestoreDb.settings({ ignoreUndefinedProperties: true });
+      } catch {}
     } catch (dbErr: any) {
-      console.warn(`[Firebase Admin] Gagal menyambung database Firestore '${databaseId}', mencuba default:`, dbErr.message);
-      firestoreDb = getFirestore(adminApp);
-      firestoreDb.settings({ ignoreUndefinedProperties: true });
+      try {
+        firestoreDb = getFirestore(adminApp);
+        try {
+          firestoreDb.settings({ ignoreUndefinedProperties: true });
+        } catch {}
+      } catch {}
     }
 
     try {
@@ -204,15 +213,12 @@ export function initFirebaseAdmin(): { app: App | null; db: Firestore | null; er
         `${adminApp.options.projectId}.firebasestorage.app`;
       const storage = getStorage(adminApp);
       storageBucketInstance = storage.bucket(storageBucketName);
-    } catch (storageErr: any) {
-      console.warn('[Firebase Admin] Amaran inisialisasi Firebase Storage:', storageErr.message);
-    }
+    } catch {}
 
     adminInitError = null;
     return { app: adminApp, db: firestoreDb, error: null };
   } catch (err: any) {
-    adminInitError = err.message || 'Ralat tidak diketahui semasa inisialisasi Firebase Admin';
-    console.warn('[Firebase Admin] Notis permulaan:', adminInitError);
+    adminInitError = err.message || 'Ralat semasa inisialisasi Firebase Admin';
     return { app: null, db: null, error: adminInitError };
   }
 }
@@ -244,6 +250,11 @@ export interface FirebaseAdminStatus {
 }
 
 export async function checkFirebaseAdminStatus(): Promise<FirebaseAdminStatus> {
+  // Use cached result if within 30 seconds
+  if (cachedStatus && Date.now() - cachedStatus.timestamp < 30000) {
+    return cachedStatus.status;
+  }
+
   const { credentials, error: parseError } = parseServiceAccountEnv();
 
   const projectId =
@@ -265,14 +276,37 @@ export async function checkFirebaseAdminStatus(): Promise<FirebaseAdminStatus> {
       : firebaseConfig.storageBucket) ||
     `${projectId}.firebasestorage.app`;
 
+  // Fast exit: if no credentials and not in GCP runtime, immediately report unconfigured without hanging
+  const isGcpEnvironment = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE);
+  if (!credentials && !isGcpEnvironment) {
+    const unconfiguredStatus: FirebaseAdminStatus = {
+      configured: false,
+      projectId,
+      databaseId,
+      storageBucket,
+      hasServiceAccount: false,
+      connectionHealthy: false,
+      error: parseError || 'Pemboleh ubah persekitaran FIREBASE_SERVICE_ACCOUNT belum dikonfigurasi.',
+      guidance: 'Untuk mengaktifkan Firestore & Storage di Vercel: Tambah environment variable tunggal FIREBASE_SERVICE_ACCOUNT (Service Account JSON penuh atau Base64) dalam tetapan Vercel.',
+    };
+    cachedStatus = { status: unconfiguredStatus, timestamp: Date.now() };
+    return unconfiguredStatus;
+  }
+
   const db = getAdminDb();
   let connectionHealthy = false;
   let testError: string | undefined = parseError || adminInitError || undefined;
 
   if (db) {
     try {
-      // Test read on the validation collection
-      await db.collection('test').doc('connection').get();
+      // Test read with 3.5-second timeout so it never hangs serverless invocations
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore connection check timed out (3500ms)')), 3500)
+      );
+      await Promise.race([
+        db.collection('test').doc('connection').get(),
+        timeoutPromise,
+      ]);
       connectionHealthy = true;
       testError = undefined;
     } catch (err: any) {
@@ -287,7 +321,7 @@ export async function checkFirebaseAdminStatus(): Promise<FirebaseAdminStatus> {
 
   const isConfigured = Boolean(connectionHealthy || credentials);
 
-  return {
+  const status: FirebaseAdminStatus = {
     configured: isConfigured,
     projectId,
     databaseId,
@@ -300,4 +334,7 @@ export async function checkFirebaseAdminStatus(): Promise<FirebaseAdminStatus> {
       ? undefined
       : 'Untuk mengaktifkan Firestore & Storage di Vercel: Tambah environment variable tunggal FIREBASE_SERVICE_ACCOUNT (Service Account JSON penuh atau Base64) dalam tetapan Vercel.',
   };
+
+  cachedStatus = { status, timestamp: Date.now() };
+  return status;
 }

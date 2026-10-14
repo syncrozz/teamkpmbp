@@ -5,6 +5,7 @@ service cloud.firestore {
     // Helper: Is user an authorized administrator
     function isAdmin() {
       return request.auth != null && (
+        request.auth.token.email == 'cgkhairi2u@gmail.com' ||
         request.auth.token.email == 'khaikerr@gmail.com' ||
         request.auth.token.email == 'kpmbppsn@gmail.com' ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
