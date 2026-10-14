@@ -1,10 +1,12 @@
-import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { getStorage, Storage } from 'firebase-admin/storage';
+import type { App } from 'firebase-admin/app';
+import type { Firestore } from 'firebase-admin/firestore';
+import type { Storage } from 'firebase-admin/storage';
+import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const configPath = path.resolve(__dirname, '../../firebase-applet-config.json');
@@ -153,6 +155,10 @@ export function initFirebaseAdmin(): { app: App | null; db: Firestore | null; er
       return { app: null, db: null, error: adminInitError };
     }
 
+    const { initializeApp, getApps, cert } = require('firebase-admin/app');
+    const { getFirestore } = require('firebase-admin/firestore');
+    const { getStorage } = require('firebase-admin/storage');
+
     const existingApps = getApps();
     if (existingApps.length > 0) {
       adminApp = existingApps[0];
@@ -195,24 +201,30 @@ export function initFirebaseAdmin(): { app: App | null; db: Firestore | null; er
     try {
       firestoreDb = getFirestore(adminApp, databaseId);
       try {
-        firestoreDb.settings({ ignoreUndefinedProperties: true });
+        if (firestoreDb) {
+          firestoreDb.settings({ ignoreUndefinedProperties: true });
+        }
       } catch {}
     } catch (dbErr: any) {
       try {
         firestoreDb = getFirestore(adminApp);
         try {
-          firestoreDb.settings({ ignoreUndefinedProperties: true });
+          if (firestoreDb) {
+            firestoreDb.settings({ ignoreUndefinedProperties: true });
+          }
         } catch {}
       } catch {}
     }
 
     try {
-      const storageBucketName =
-        process.env.FIREBASE_STORAGE_BUCKET ||
-        firebaseConfig.storageBucket ||
-        `${adminApp.options.projectId}.firebasestorage.app`;
-      const storage = getStorage(adminApp);
-      storageBucketInstance = storage.bucket(storageBucketName);
+      if (adminApp) {
+        const storageBucketName =
+          process.env.FIREBASE_STORAGE_BUCKET ||
+          firebaseConfig.storageBucket ||
+          `${adminApp.options?.projectId || 'gen-lang-client-0981591806'}.firebasestorage.app`;
+        const storage = getStorage(adminApp);
+        storageBucketInstance = storage.bucket(storageBucketName);
+      }
     } catch {}
 
     adminInitError = null;
