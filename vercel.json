@@ -4,15 +4,19 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api",
+      "destination": "/api/index.ts"
+    },
+    {
       "source": "/api/(.*)",
-      "destination": "/api"
+      "destination": "/api/index.ts"
     },
     {
       "source": "/uploads/(.*)",
-      "destination": "/api/uploads/$1"
+      "destination": "/api/index.ts"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/|uploads/).*)",
       "destination": "/index.html"
     }
   ]

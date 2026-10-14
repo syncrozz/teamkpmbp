@@ -46,6 +46,68 @@ export function createApp() {
   app.use(express.json({ limit: '25mb' }));
   app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+  // Vercel Serverless & Reverse Proxy URL Normalization (applies strictly to API subroutes)
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    // 1. Reconstruct from Vercel dynamic catch-all route if path query param is passed
+    const pathParam = (req.query as any)?.path || (req.params as any)?.path;
+    if (pathParam) {
+      const subpath = Array.isArray(pathParam) ? pathParam.join('/') : String(pathParam);
+      req.url = `/api/${subpath}`;
+      return next();
+    }
+
+    // 2. Restore from originalUrl if req.url was collapsed to /api and originalUrl had a subpath
+    const orig = req.originalUrl;
+    if (orig && (req.url === '/api' || req.url === '/api/') && orig !== req.url && orig.startsWith('/api/')) {
+      req.url = orig;
+      return next();
+    }
+
+    // 3. Strip any /api/index.ts or /api/index prefix
+    if (req.url.startsWith('/api/index.ts')) {
+      req.url = req.url.replace('/api/index.ts', '/api');
+    } else if (req.url.startsWith('/api/index')) {
+      req.url = req.url.replace('/api/index', '/api');
+    }
+
+    // 4. If path is a known API prefix that had /api stripped by upstream rewrite (e.g. /auth/status, /portal/data):
+    const knownApiPrefixes = [
+      '/auth/',
+      '/portal/',
+      '/announcements',
+      '/schedules',
+      '/documents',
+      '/events',
+      '/locations',
+      '/ai/',
+      '/admin/',
+      '/health',
+    ];
+    const isKnownApi = knownApiPrefixes.some((prefix) => req.url.startsWith(prefix));
+    if (isKnownApi) {
+      req.url = '/api' + req.url;
+    }
+
+    next();
+  });
+
+  // Base API health / ping endpoints (only for /api and /api/health)
+  app.get('/api', (_req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      service: 'KPMBP Contingent SOAR Portal API',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/health', (_req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      service: 'KPMBP Contingent SOAR Portal API',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // Helper to extract session from Authorization Bearer header
   async function getSessionFromReq(req: Request): Promise<{ role: 'admin' | 'team'; email?: string } | null> {
     const authHeader = req.headers.authorization;
@@ -897,11 +959,11 @@ Berikan output dalam format JSON:
     }
   });
 
-  // Catch-all for unknown /api/* routes: MUST return JSON error, NEVER the SPA HTML!
+  // Catch-all ONLY for unknown /api/* routes: MUST return JSON error, NEVER the SPA HTML!
   app.all('/api/*', (req: Request, res: Response) => {
     res.status(404).json({
       error: 'API endpoint not found',
-      path: req.path,
+      path: req.originalUrl || req.url || req.path,
       method: req.method,
     });
   });

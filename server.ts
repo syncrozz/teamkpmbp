@@ -29,7 +29,12 @@ async function startServer() {
   });
 }
 
-// Run only when started directly (not when imported as a serverless function)
-startServer().catch((err) => {
-  console.error('[KPMBP Contingent Hub] Failed to start server:', err);
-});
+// Run only when started directly for development or container hosting (never inside Vercel Serverless Functions)
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error('[KPMBP Contingent Hub] Failed to start server:', err);
+  });
+}
+
+export { app, startServer };
+export default app;
